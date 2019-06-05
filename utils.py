@@ -137,6 +137,24 @@ class Statistic:
             self.stat = pickle.load(f)
 
         
+def tsne_plot(hs, ht, ys, yt):
+    h = np.vstack([hs, ht])
+    y = np.hstack([ys, yt])
+    n_hs = hs.shape[0]
+    tsne = TSNE(init='pca')
+    h_tsne = tsne.fit_transform(h)
+    h_min, h_max = h_tsne.min(0), h_tsne.max(0)
+    h_norm = (h_tsne - h_min) / (h_max - h_min)  # 归一化
+
+    plt.figure(figsize=(4, 4))
+    colors = list(map(lambda x: 'red' if x>0 else 'blue', ys))
+    plt.scatter(h_norm[:n_hs,0], h_norm[:n_hs,1], color=colors, marker='o', s=10)
+    colors = list(map(lambda x: 'red' if x>0 else 'blue', yt))
+    plt.scatter(h_norm[n_hs:,0], h_norm[n_hs:,1], color=colors, marker='^', s=10)
+    plt.xticks([])
+    plt.yticks([])
+    plt.show()
+
 if __name__ == '__main__':
     pass
     a = glob.glob('logs/books-electronics/0.*')
