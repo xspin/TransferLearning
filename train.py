@@ -3,7 +3,7 @@ import tensorflow as tf
 import pickle
 import numpy as np
 import utils
-from utils import config2str, Statistic
+from utils import config2str, Statistic, get_dataset
 import os, time, sys
 import matplotlib.pyplot as plt
 # os.environ['TF_CPPMIN_LOG_LEVEL'] = '2'
@@ -110,6 +110,7 @@ if __name__ == '__main__':
     config = Config(data_path = 'dataset/Amazon_review/amazon_acl.pickle',
                     none = None,
                     log_path = 'logs',
+                    # books dvd electronics kitchen
                     src_name = 'books',
                     tgt_name = 'electronics',
                     epochs_step1 = 50,
@@ -130,45 +131,8 @@ if __name__ == '__main__':
     if os.name == 'posix': # just for debug
         config = config._replace(epochs_step1=3, epochs_step2=5)
 
-    with open(config.data_path,'rb') as f:
-        data = pickle.load(f)
-
-    # books dvd electronics kitchen
-    src_name = config.src_name
-    tgt_name = config.tgt_name
-
-    src_data = data[src_name]
-    tgt_data = data[tgt_name]
-
-    src_x_pos = src_data['positive']
-    src_x_neg = src_data['negative']
-    src_xdata = np.concatenate((src_x_pos[0].toarray(), src_x_neg[0].toarray()), axis=0)
-    src_ydata = np.r_[src_x_pos[1], src_x_neg[1]]
-
-    # x_val = np.r_[xdata[:100],xdata[-100:]]
-    # y_val = np.r_[ydata[:100],ydata[-100:]]
-
-    tgt_xdata, tgt_ydata = tgt_data['unlabeled']
-    tgt_xdata = tgt_xdata.toarray()
-    # tgt_ydata = tgt_ydata
-
-    tgt_x_pos = tgt_data['positive']
-    tgt_x_neg = tgt_data['negative']
-    test_xdata = np.concatenate((tgt_x_pos[0].toarray(), tgt_x_neg[0].toarray()), axis=0)
-    test_ydata = np.r_[tgt_x_pos[1], tgt_x_neg[1]]
-
-    # index = np.arange(src_xdata.shape[0])
-    # np.random.shuffle(index)
-    # src_xdata = src_xdata[index]
-    # src_ydata = src_ydata[index]
-    t_src_xdata = np.r_[src_xdata, src_xdata, src_xdata][:tgt_xdata.shape[0]]
-    t_src_ydata = np.r_[src_ydata, src_ydata, src_ydata][:tgt_xdata.shape[0]]
-
-    # y_dis_src = np.ones(t_src_xdata.shape[0])
-    # y_dis_tgt = np.zeros(tgt_xdata.shape[0])
-
-    src_ydata = src_ydata.reshape([len(src_ydata), 1])
-    tgt_ydata = tgt_ydata.reshape([len(tgt_ydata), 1])
+    src_xdata, src_ydata, tgt_xdata, tgt_ydata = get_dataset(config)
+    src_name, tgt_name = config.src_name, config.tgt_name
 
     print('='*80)
     print('Source Data: {} --> Target Data: {}'.format(src_name, tgt_name))
@@ -176,8 +140,6 @@ if __name__ == '__main__':
     print('src_ydata:', src_ydata.shape)
     print('tgt_xdata:', tgt_xdata.shape)
     print('tgt_ydata:', tgt_ydata.shape)
-    print('test_xdata:', test_xdata.shape)
-    print('test_ydata:', test_ydata.shape)
     print('='*80)
     config = config._replace(input_shape=(src_xdata.shape[1],))
 

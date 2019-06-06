@@ -67,8 +67,8 @@ class Model:
             src_feature_2 = self.FE_shared(src_input)
             tgt_feature_2 = self.FE_shared(tgt_input)
             tgt_feature_1 = self.FE_tgt(tgt_input)
-            src_feature = kl.Concatenate(name='Concat_src')([src_feature_1, src_feature_2])
-            tgt_feature = kl.Concatenate(name='Concat_tgt')([tgt_feature_1, tgt_feature_2])
+            self.src_feature = kl.Concatenate(name='Concat_src')([src_feature_1, src_feature_2])
+            self.tgt_feature = kl.Concatenate(name='Concat_tgt')([tgt_feature_1, tgt_feature_2])
 
         self.Classifier = classifier(config.classifier_shapes, self.ph_drop_rate, name='Classifier')
         self.Discriminator = discriminator(config.discriminator_shapes, self.ph_drop_rate, name='Discriminator')
@@ -77,28 +77,28 @@ class Model:
         y_dis_tgt = self.Discriminator(tgt_feature_2)
 
         # Outputs
-        with tf.name_scope('Outputs'):
-            self.y_pred_src= self.Classifier(src_feature)
-            self.y_pred_d = tf.concat([y_dis_src, y_dis_tgt], 0, name='pred_d')
-            self.y_true_d = tf.concat([tf.zeros_like(y_dis_src, dtype=tf.int32), tf.ones_like(y_dis_tgt, dtype=tf.int32)], 0, name='true_d')
-            self.y_pred_tgt = self.Classifier(tgt_feature)
+        # with tf.name_scope('Outputs'):
+        self.y_pred_src= self.Classifier(self.src_feature)
+        self.y_pred_d = tf.concat([y_dis_src, y_dis_tgt], 0, name='pred_d')
+        self.y_true_d = tf.concat([tf.zeros_like(y_dis_src, dtype=tf.int32), tf.ones_like(y_dis_tgt, dtype=tf.int32)], 0, name='true_d')
+        self.y_pred_tgt = self.Classifier(self.tgt_feature)
         # print(self.y_pred_d.shape)
 
         # Metrics
-        with tf.name_scope('Accuracy'):
-            self.acc_src = self.binary_acc(self.ph_y_true_src, self.y_pred_src)
-            self.acc_d = self.binary_acc(self.y_true_d, self.y_pred_d)
-            self.acc_tgt = self.binary_acc(self.ph_y_true_tgt, self.y_pred_tgt)
+        # with tf.name_scope('Accuracy'):
+        self.acc_src = self.binary_acc(self.ph_y_true_src, self.y_pred_src)
+        self.acc_d = self.binary_acc(self.y_true_d, self.y_pred_d)
+        self.acc_tgt = self.binary_acc(self.ph_y_true_tgt, self.y_pred_tgt)
 
         # Losses
-        with tf.name_scope('Losses'):
-            # self.loss_reg = tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
-            self.loss_y = tf.losses.sigmoid_cross_entropy(
-                                                multi_class_labels=self.ph_y_true_src, logits=self.y_pred_src)
-            self.loss_d = tf.losses.sigmoid_cross_entropy(
-                                                multi_class_labels=self.y_true_d, logits=self.y_pred_d)
-            #self.loss_mmd = kl.Lambda(lambda x:mmd_loss(x[0],x[1],1), name='MMD_loss')([src_feature, tgt_feature])
-            self.loss_mmd = kl.Lambda(lambda x:correlation_loss(x[0],x[1],1), name='MMD_loss')([src_feature, tgt_feature])
+        # with tf.name_scope('Losses'):
+        # self.loss_reg = tf.reduce_sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
+        self.loss_y = tf.losses.sigmoid_cross_entropy(
+                                            multi_class_labels=self.ph_y_true_src, logits=self.y_pred_src)
+        self.loss_d = tf.losses.sigmoid_cross_entropy(
+                                            multi_class_labels=self.y_true_d, logits=self.y_pred_d)
+        #self.loss_mmd = kl.Lambda(lambda x:mmd_loss(x[0],x[1],1), name='MMD_loss')([src_feature, tgt_feature])
+        self.loss_mmd = kl.Lambda(lambda x:correlation_loss(x[0],x[1],1), name='MMD_loss')([self.src_feature, self.tgt_feature])
 
         # pretraining step
         self.fg_loss_pre = self.loss_y - config.gamma * self.loss_d
@@ -108,10 +108,10 @@ class Model:
         self.fd_loss_train = self.loss_d
         
         # Training operators
-        self.fg_op_pre = tf.train.AdamOptimizer(config.lr_fg).minimize(self.fg_loss_pre)
-        self.fd_op_pre = tf.train.AdamOptimizer(config.lr_fd).minimize(self.fd_loss_pre)
-        self.fg_op_train = tf.train.AdamOptimizer(config.lr_fg).minimize(self.fg_loss_train)
-        self.fd_op_train = tf.train.AdamOptimizer(config.lr_fd).minimize(self.fd_loss_train)
+        self.fg_op_pre = tf.train.AdamOptimizer(config.lr_fg, name='Ada_fg_pre').minimize(self.fg_loss_pre)
+        self.fd_op_pre = tf.train.AdamOptimizer(config.lr_fd, name='Ada_fd_pre').minimize(self.fd_loss_pre)
+        self.fg_op_train = tf.train.AdamOptimizer(config.lr_fg, name='Ada_fg_train').minimize(self.fg_loss_train)
+        self.fd_op_train = tf.train.AdamOptimizer(config.lr_fd, name='Ada_fd_train').minimize(self.fd_loss_train)
 
         # step 1
         self.model_step1 = km.Model([src_input, tgt_input], [self.y_pred_src, y_dis_src, y_dis_tgt])
@@ -134,12 +134,12 @@ class Model:
         tf.summary.scalar('loss_d', self.loss_d)
         tf.summary.scalar('loss_mmd', self.loss_mmd)
         # tf.summary.scalar('loss_reg', self.loss_reg)
-        tf.summary.histogram('FE_src', self.FE_src.get_weights()[0])
-        tf.summary.histogram('FE_tgt', self.FE_tgt.get_weights()[0])
-        tf.summary.histogram('FE_shared', self.FE_shared.get_weights()[0])
-        tf.summary.histogram('FE_src_avg', tf.reduce_mean(self.FE_src.get_weights()[0]))
-        tf.summary.histogram('FE_tgt_avg', tf.reduce_mean(self.FE_tgt.get_weights()[0]))
-        tf.summary.histogram('FE_shared_avg', tf.reduce_mean(self.FE_shared.get_weights()[0]))
+        # tf.summary.histogram('FE_src', self.FE_src.get_weights()[0])
+        # tf.summary.histogram('FE_tgt', self.FE_tgt.get_weights()[0])
+        # tf.summary.histogram('FE_shared', self.FE_shared.get_weights()[0])
+        # tf.summary.histogram('FE_src_avg', tf.reduce_mean(self.FE_src.get_weights()[0]))
+        # tf.summary.histogram('FE_tgt_avg', tf.reduce_mean(self.FE_tgt.get_weights()[0]))
+        # tf.summary.histogram('FE_shared_avg', tf.reduce_mean(self.FE_shared.get_weights()[0]))
         self.merged_summary = tf.summary.merge_all()
 
     def binary_acc(self, y_true, y_pred):

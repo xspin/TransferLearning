@@ -7,6 +7,32 @@ import os
 import pickle
 import glob
 
+def get_dataset(config):
+    with open(config.data_path,'rb') as f:
+        data = pickle.load(f)
+
+    # books dvd electronics kitchen
+    src_name = config.src_name
+    tgt_name = config.tgt_name
+    src_data = data[src_name]
+    tgt_data = data[tgt_name]
+
+    src_x_pos = src_data['positive']
+    src_x_neg = src_data['negative']
+    src_xdata = np.concatenate((src_x_pos[0].toarray(), src_x_neg[0].toarray()), axis=0)
+    src_ydata = np.r_[src_x_pos[1], src_x_neg[1]]
+
+    tgt_xdata, tgt_ydata = tgt_data['unlabeled']
+    tgt_xdata = tgt_xdata.toarray()
+    tgt_x_pos = tgt_data['positive']
+    tgt_x_neg = tgt_data['negative']
+    # test_xdata = np.concatenate((tgt_x_pos[0].toarray(), tgt_x_neg[0].toarray()), axis=0)
+    # test_ydata = np.r_[tgt_x_pos[1], tgt_x_neg[1]]
+
+    src_ydata = src_ydata.reshape([len(src_ydata), 1])
+    tgt_ydata = tgt_ydata.reshape([len(tgt_ydata), 1])
+    return src_xdata, src_ydata, tgt_xdata, tgt_ydata
+
 def generator(xdata, ydata, batchsize):
     n = len(xdata)
     index = np.arange(n)
@@ -87,6 +113,8 @@ class Statistic:
         else:
             self.stat[name] = [value]
     def get_fig_dir(self, acc=None):
+        def func(a):
+            return '.'.join(map(str,a))
         if acc is None:
             acc = max(self.stat['acc_tgt'])
         prefix = "{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
@@ -97,9 +125,9 @@ class Statistic:
             self.config.drop_rate,
             self.config.lr_fd,
             self.config.lr_fg,
-            self.config.fe_shapes,
-            self.config.classifier_shapes,
-            self.config.discriminator_shapes
+            func(self.config.fe_shapes),
+            func(self.config.classifier_shapes),
+            func(self.config.discriminator_shapes)
             )
         return os.path.join(self.path, prefix)
 
@@ -120,15 +148,10 @@ class Statistic:
         print('#Dump data to', pk_path)
         with open(pk_path, 'wb') as f:
             pickle.dump(self.stat, f)
-        self.ckpt_path = os.path.join(fig_dir, 'ckpt/model')
+        self.ckpt_path = os.path.join(fig_dir, 'ckpt/model.ckpt')
 
     def load(self, acc=None):
-        if acc is None:
-            dirs = glob.glob(os.path.join(self.path,'0.*'))
-            dirs.sort(reverse=True)
-            fig_dir = dirs[0]
-        else:
-            fig_dir = self.get_fig_dir(acc)
+        fig_dir = self.get_acc_dir(acc)
         pk_path = os.path.join(fig_dir, 'stat.pickle')
         if not os.path.exists(pk_path):
             print('#Warning: %s not exist'%pk_path)
@@ -136,26 +159,55 @@ class Statistic:
         with open(pk_path, 'rb') as f:
             self.stat = pickle.load(f)
 
+    def get_acc_dir(self, acc=None):
+        if acc is None:
+            dirs = glob.glob(os.path.join(self.path,'0.*'))
+            dirs.sort(reverse=True)
+            fig_dir = dirs[0]
+        else:
+            fig_dir = self.get_fig_dir(acc)
+        return fig_dir
+
+    def get_ckpt_dir(self, acc=None):
+        fig_dir = self.get_acc_dir(acc)
+        self.ckpt_dir = os.path.join(fig_dir, 'ckpt')
+        return self.ckpt_dir
+
         
-def tsne_plot(hs, ht, ys, yt):
+
+        
+def tsne_plot(hs, ht, ys, yt, save_path=None, show=False):
+    clock = Clock()
     h = np.vstack([hs, ht])
-    y = np.hstack([ys, yt])
+    y = np.vstack([ys, yt])
     n_hs = hs.shape[0]
-    tsne = TSNE(init='pca')
+    tsne = TSNE(init='random')
     h_tsne = tsne.fit_transform(h)
     h_min, h_max = h_tsne.min(0), h_tsne.max(0)
     h_norm = (h_tsne - h_min) / (h_max - h_min)  # 归一化
 
-    plt.figure(figsize=(4, 4))
+    plt.figure(figsize=(6, 6))
     colors = list(map(lambda x: 'red' if x>0 else 'blue', ys))
     plt.scatter(h_norm[:n_hs,0], h_norm[:n_hs,1], color=colors, marker='o', s=10)
     colors = list(map(lambda x: 'red' if x>0 else 'blue', yt))
     plt.scatter(h_norm[n_hs:,0], h_norm[n_hs:,1], color=colors, marker='^', s=10)
     plt.xticks([])
     plt.yticks([])
-    plt.show()
+    print('Cost:', clock.toc())
+    if save_path:
+        print('Save TSNE fig to', save_path)
+        plt.savefig(save_path)
+    if show: plt.show()
 
 if __name__ == '__main__':
-    pass
-    a = glob.glob('logs/books-electronics/0.*')
-    print(a)
+    clock = Clock()
+    n = 700
+    d = 64
+    hs = 1+np.random.randn(n, d)*0.5
+    ht = np.random.randn(n, d)
+    ys = np.random.randint(0, 2, [n,1])
+    yt = np.random.randint(0, 2, [n,1])
+    tsne_plot(hs, ht, ys, yt, 'logs/tsne.png')
+    t = clock.toc()
+    print('cost:', t)
+
