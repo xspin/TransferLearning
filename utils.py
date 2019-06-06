@@ -6,6 +6,9 @@ from sklearn.manifold import TSNE
 import os
 import pickle
 import glob
+# from model import Model
+import model
+# print(model.Model)
 
 def get_dataset(config):
     with open(config.data_path,'rb') as f:
@@ -188,26 +191,126 @@ def tsne_plot(hs, ht, ys, yt, save_path=None, show=False):
 
     plt.figure(figsize=(6, 6))
     colors = list(map(lambda x: 'red' if x>0 else 'blue', ys))
-    plt.scatter(h_norm[:n_hs,0], h_norm[:n_hs,1], color=colors, marker='o', s=10)
-    colors = list(map(lambda x: 'red' if x>0 else 'blue', yt))
-    plt.scatter(h_norm[n_hs:,0], h_norm[n_hs:,1], color=colors, marker='^', s=10)
+    plt.scatter(h_norm[:n_hs,0], h_norm[:n_hs,1], color=colors, marker='o', s=15, alpha=0.6)
+    colors = list(map(lambda x: 'purple' if x>0 else 'darkcyan', yt))
+    plt.scatter(h_norm[n_hs:,0], h_norm[n_hs:,1], color=colors, marker='^', s=15, alpha=0.6)
     plt.xticks([])
     plt.yticks([])
+    plt.xlim([-0.01, 1.01])
+    plt.ylim([-0.01, 1.01])
     print('Cost:', clock.toc())
     if save_path:
-        print('Save TSNE fig to', save_path)
+        print('Save TSNE figure to', save_path)
         plt.savefig(save_path)
-    if show: plt.show()
+    if show or not save_path: plt.show()
+
+def run(sess, config, data):
+    src_xdata, src_ydata, tgt_xdata, tgt_ydata = data
+    src_gen = generator(src_xdata, src_ydata, config.batch_size)
+    tgt_gen = generator(tgt_xdata, tgt_ydata, config.batch_size)
+
+    # sess = tf.Session()
+    stat = Statistic(config)
+    md = model.Model(config)
+    md.summary()
+    init = tf.global_variables_initializer()
+    sess.run(init)
+    saver = tf.train.Saver() # after initializer
+    writer = tf.summary.FileWriter(stat.summary_path, sess.graph)
+    # Pre-training Step & Training Step
+    # for step in ['Pretraining', 'Training']:
+    accuracy_tgt = []
+    global_step = 0
+    for step in ['Pretraining', 'Training']:
+        print('='*80)
+        if step == 'Pretraining': 
+            print('Step Pre-training ...')
+            n_epochs = config.epochs_step1
+            md.init()
+        else:
+            print('Step Training ...')
+            n_epochs = config.epochs_step2
+            md.init_fe3()
+        clock_epoch = Clock(n_epochs)
+        mk_epoch = Marker()
+        k_epoch = 1
+        for epoch in range(n_epochs):
+            if epoch % k_epoch == 0:
+                print('{} Epoch #{}/{}'.format(step, epoch+1, n_epochs))
+            n_batchs = max(len(src_ydata), len(tgt_ydata))//config.batch_size
+            clock_batch = Clock(n_batchs)
+            mk_batch = Marker()
+            # acc_d = 0.5
+            for batch in range(n_batchs):
+                batch_src_x, batch_src_y = next(src_gen)
+                batch_tgt_x, batch_tgt_y = next(tgt_gen)
+                feed_dict = {md.ph_src_input: batch_src_x, 
+                            md.ph_y_true_src: batch_src_y, 
+                            md.ph_tgt_input: batch_tgt_x,
+                            md.ph_y_true_tgt: batch_tgt_y, 
+                            md.ph_drop_rate: config.drop_rate
+                            }
+                if step == 'Pretraining':
+                    md.init_pre_fg()
+                    sess.run([md.fg_op_pre], feed_dict=feed_dict)
+                    md.init_pre_fd()
+                    sess.run([md.fd_op_pre], feed_dict=feed_dict)
+                else:
+                    md.init_train_fg()
+                    sess.run([md.fg_op_train], feed_dict=feed_dict)
+                    md.init_train_fd()
+                    sess.run([md.fd_op_train], feed_dict=feed_dict)
+
+                if batch %(n_batchs//5) == 0:
+                # if False:
+                    acc_src, acc_tgt, acc_d, yloss, fgloss, fdloss, mmdloss = sess.run(
+                            [md.acc_src, md.acc_tgt, md.acc_d, 
+                                md.loss_y, md.fg_loss_pre, md.fd_loss_pre, 
+                                md.loss_mmd], 
+                            feed_dict=feed_dict)
+                    cost, eta = clock_batch.toc(batch)
+                    print('    Batch: {:02d}/{}  acc_src: {:.03f} acc_tgt: {:.03f}{} acc_d: {:.03f}'\
+                            ' src_loss: {:.04f} fg_loss: {:.04f} fd_loss: {:.04f} mmd_loss: {:.04f}'\
+                            '  Cost: {} ETA: {}'.format(
+                                batch+1, n_batchs, 
+                                acc_src, acc_tgt, mk_batch.update(acc_tgt), acc_d,
+                                yloss, fgloss, fdloss, mmdloss,
+                                cost, eta
+                                ))
+            # Lookup the accuracy of SRC and TGT data over the whole dataset
+            feed_dict = {md.ph_src_input: src_xdata, 
+                        md.ph_y_true_src: src_ydata,
+                        md.ph_tgt_input: tgt_xdata,
+                        md.ph_y_true_tgt: tgt_ydata,
+                        md.ph_drop_rate: 0
+                        }
+            output = sess.run(
+                [md.acc_src, md.acc_tgt, md.acc_d, md.fd_loss_pre, md.loss_mmd], 
+                feed_dict=feed_dict)
+            acc_src, acc_tgt, acc_d, loss_fd, loss_mmd = output
+            cost, eta = clock_epoch.toc(epoch)
+            accuracy_tgt.append(acc_tgt)
+            for name, value in zip(['acc_src', 'acc_tgt', 'acc_d', 'loss_fd', 'loss_mmd'], output):
+                stat.update(name, value)
+            if epoch % k_epoch == 0:
+                print('  >> max_acc_tgt: [{:.04f}] acc_src: {:.04f} acc_tgt: {:.04f}{}  Cost: {} ETA: {}'.format(
+                    max(accuracy_tgt), acc_src, acc_tgt, mk_epoch.update(acc_tgt), cost, eta))
+            summary = sess.run(md.merged_summary, feed_dict=feed_dict)
+            global_step += 1
+            writer.add_summary(summary, global_step)
+        print('Maximum acc_tgt: {}'.format(max(accuracy_tgt)))
+    stat.save()
+    print('#Save model to', stat.ckpt_path)
+    saver.save(sess, stat.ckpt_path)
+    # sess.close()
+    return max(accuracy_tgt)
 
 if __name__ == '__main__':
-    clock = Clock()
-    n = 700
-    d = 64
-    hs = 1+np.random.randn(n, d)*0.5
-    ht = np.random.randn(n, d)
-    ys = np.random.randint(0, 2, [n,1])
-    yt = np.random.randint(0, 2, [n,1])
-    tsne_plot(hs, ht, ys, yt, 'logs/tsne.png')
-    t = clock.toc()
-    print('cost:', t)
+    n = 100
+    d = 128
+    # hs = 1+np.random.randn(n, d)*0.5
+    # ht = np.random.randn(n, d)
+    # ys = np.random.randint(0, 2, [n,1])
+    # yt = np.random.randint(0, 2, [n,1])
+    # tsne_plot(hs, ht, ys, yt)
 

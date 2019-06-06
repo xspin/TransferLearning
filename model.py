@@ -44,6 +44,7 @@ def on_epoch_end(batch, logs, model, x_test, y_test, batch_size):
 class Model:
     def __init__(self, config):
         # self.sess = tfsession
+        self.fuck = 'shit'
         n_classes = 1 if config.n_classes == 2 else config.n_classes
         with tf.name_scope('Placeholders'):
             self.ph_src_input = tf.placeholder(tf.float32, shape=[None, *config.input_shape], name='SourcePH')
@@ -62,13 +63,13 @@ class Model:
         self.FE_tgt = mlp(config.fe_shapes, self.ph_drop_rate, name='FE3')
         # self.FE_tgt = self.FE_src
 
-        with tf.name_scope('Concat'):
-            src_feature_1 = self.FE_src(src_input)
-            src_feature_2 = self.FE_shared(src_input)
-            tgt_feature_2 = self.FE_shared(tgt_input)
-            tgt_feature_1 = self.FE_tgt(tgt_input)
-            self.src_feature = kl.Concatenate(name='Concat_src')([src_feature_1, src_feature_2])
-            self.tgt_feature = kl.Concatenate(name='Concat_tgt')([tgt_feature_1, tgt_feature_2])
+        # with tf.name_scope('Concat'):
+        src_feature_1 = self.FE_src(src_input)
+        src_feature_2 = self.FE_shared(src_input)
+        tgt_feature_2 = self.FE_shared(tgt_input)
+        tgt_feature_1 = self.FE_tgt(tgt_input)
+        self.src_feature = kl.Concatenate(name='Concat_src')([src_feature_1, src_feature_2])
+        self.tgt_feature = kl.Concatenate(name='Concat_tgt')([tgt_feature_1, tgt_feature_2])
 
         self.Classifier = classifier(config.classifier_shapes, self.ph_drop_rate, name='Classifier')
         self.Discriminator = discriminator(config.discriminator_shapes, self.ph_drop_rate, name='Discriminator')

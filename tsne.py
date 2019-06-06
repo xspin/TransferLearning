@@ -2,33 +2,10 @@ from utils import Statistic, get_dataset, tsne_plot
 from model import Model, Config 
 import os, pickle
 import tensorflow as tf
+from config import config, param, param_name
 tf.logging.set_verbosity(tf.logging.ERROR)
 
 if __name__ == '__main__':
-
-    config = Config(data_path = 'dataset/Amazon_review/amazon_acl.pickle',
-                    none = None,
-                    log_path = 'logs',
-                    src_name = 'books',
-                    tgt_name = 'electronics',
-                    epochs_step1 = 50,
-                    epochs_step2 = 700,
-                    batch_size = 64,
-                    n_classes = 2,
-                    input_shape = (500,),
-                    gamma = 1, # loss_d in pretraining
-                    alpha = 10, # loss_mmd
-                    beta = 10, # loss_d
-                    lr_fd = 0.0001,
-                    lr_fg = 0.0001,
-                    drop_rate = 0.5,
-                    fe_shapes = [64], # the shapes of feature extractor 
-                    classifier_shapes = [64],
-                    discriminator_shapes = [64])
-
-    if os.name == 'posix': # just for debug
-        config = config._replace(epochs_step1=3, epochs_step2=5)
-
 
     src_xdata, src_ydata, tgt_xdata, tgt_ydata = get_dataset(config)
     print('='*80)
@@ -64,6 +41,6 @@ if __name__ == '__main__':
         hs, ht = sess.run([model.src_feature, model.tgt_feature], feed_dict)
         print('shape of hs:', hs.shape)
         print('shape of ht:', ht.shape)
-        tsne_plot(hs, ht, src_ydata, tgt_ydata, os.path.join(stat.get_acc_dir(), 'tsne.png'))
+        tsne_plot(hs, ht, src_ydata, tgt_ydata, os.path.join(stat.get_acc_dir(), 'tsne.pdf'), show=True)
 
 
