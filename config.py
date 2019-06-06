@@ -1,5 +1,13 @@
-from model import Config
 import os
+from collections import namedtuple
+
+fields = ['data_path', 'epochs_step1', 'epochs_step2', 'batch_size', 
+        'fe_shapes', 'classifier_shapes', 'discriminator_shapes',
+        'input_shape', 'n_classes',
+        'gamma', 'alpha', 'beta', 'drop_rate', 'lr_fg', 'lr_fd',
+        'none', 'log_path', 'src_name', 'tgt_name'
+        ]
+Config = namedtuple('Config', fields)
 
 config = Config(data_path = 'dataset/Amazon_review/amazon_acl.pickle',
                 none = None,

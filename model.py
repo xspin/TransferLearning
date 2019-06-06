@@ -1,5 +1,4 @@
 import os, sys
-from collections import namedtuple
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
@@ -13,7 +12,8 @@ import tensorflow.keras.optimizers as ko
 from tensorflow.keras.utils import plot_model
 from mmd.losses import mmd_loss, correlation_loss
 # from utils import maximum_mean_discrepancy as mmd_loss
-from utils import config2str
+import utils
+import config
 
 def mlp(shapes, drop_rate, act='tanh', name='MLP'):
     model = km.Sequential(name=name)
@@ -191,37 +191,11 @@ class Model:
         # self.FE_src.trainable = False
         # self.Classifier.trainable = False
 
-fields = ['data_path', 'epochs_step1', 'epochs_step2', 'batch_size', 
-        'fe_shapes', 'classifier_shapes', 'discriminator_shapes',
-        'input_shape', 'n_classes',
-        'gamma', 'alpha', 'beta', 'drop_rate', 'lr_fg', 'lr_fd',
-        'none', 'log_path', 'src_name', 'tgt_name'
-        ]
-Config = namedtuple('Config', fields)
-default_config = Config(data_path = 'dataset/Amazon_review/amazon_acl.pickle',
-                log_path = 'logs',
-                src_name = 'books',
-                tgt_name = 'electronics',
-                gamma = 0.5,
-                alpha = 0.5,
-                beta = 0.5,
-                drop_rate = 0.5,
-                lr_fd = 0.01,
-                lr_fg = 0.01,
-                epochs_step1 = 5,
-                epochs_step2 = 5,
-                batch_size = 64,
-                input_shape = (50,),
-                n_classes = 2,
-                none = None,
-                fe_shapes = [512],
-                classifier_shapes = [256 ],
-                discriminator_shapes = [128])
 
 if __name__ == '__main__':
     print(tf.__version__)
-    model = Model(default_config)
-    # model.plot_models()
-    print(config2str(default_config))
-    print(np.mean(model.FE_shared.get_weights()[0], axis=1))
-    print((model.FE_shared.get_weights()[0].shape))
+    model = Model(config.config)
+    model.plot_models()
+    # print(config2str(default_config))
+    # print(np.mean(model.FE_shared.get_weights()[0], axis=1))
+    # print((model.FE_shared.get_weights()[0].shape))
