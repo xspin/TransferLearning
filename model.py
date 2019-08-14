@@ -44,7 +44,6 @@ def on_epoch_end(batch, logs, model, x_test, y_test, batch_size):
 class Model:
     def __init__(self, config):
         # self.sess = tfsession
-        self.fuck = 'shit'
         n_classes = 1 if config.n_classes == 2 else config.n_classes
         with tf.name_scope('Placeholders'):
             self.ph_src_input = tf.placeholder(tf.float32, shape=[None, *config.input_shape], name='SourcePH')
